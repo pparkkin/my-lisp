@@ -36,4 +36,10 @@ ml> join {+} (eval {tail (list 6 7 8)})
 {+ 7 8}
 ml> eval (join {+} (eval {tail (list 6 7 8)}))
 15
+ml> def {x y} 250 100
+()
+ml> - x y
+150
+ml> + x y
+350
 ```

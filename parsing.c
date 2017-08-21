@@ -24,8 +24,14 @@ void add_history(char* unused) {}
 #include <editline/history.h>
 #endif
 
-#define LASSERT(args, cond, err) \
-  if (!(cond)) { lval_del(args); return lval_err(err); }
+// ##__VA_ARGS__ pastes the variable length argument list if there are any,
+// and removes the preceding comma, if not
+#define LASSERT(args, cond, fmt, ...) \
+  if (!(cond)) { \
+    lval* err = lval_err(fmt, ##__VA_ARGS__); \
+    lval_del(args); \
+    return err; \
+  }
 
 // Declare types so I can use them later in lbuiltin typedef
 struct lval;
@@ -35,6 +41,18 @@ typedef struct lenv lenv;
 
 enum { LVAL_ERR, LVAL_NUM, LVAL_SYM,
        LVAL_FUN, LVAL_SEXPR, LVAL_QEXPR };
+
+char* ltype_name(int t) {
+  switch(t) {
+    case LVAL_ERR: return "error";
+    case LVAL_NUM: return "number";
+    case LVAL_SYM: return "symbol";
+    case LVAL_FUN: return "function";
+    case LVAL_SEXPR: return "s-expression";
+    case LVAL_QEXPR: return "q-expression";
+    default: return "unknown type";
+  }
+}
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -57,11 +75,24 @@ lval* lval_num(long x) {
   return v;
 }
 
-lval* lval_err(char* m) {
+lval* lval_err(char* fmt, ...) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_ERR;
-  v->err = malloc(strlen(m) + 1);
-  strcpy(v->err, m);
+
+  // from standard library to handle variable length argument lists
+  va_list va;
+  va_start(va, fmt);
+
+  v->err = malloc(512);
+
+  // over 511 characters will get truncated
+  vsnprintf(v->err, 511, fmt, va);
+
+  // realloc to size actually used if less than 512
+  v->err = realloc(v->err, strlen(v->err) + 1);
+
+  va_end(va);
+
   return v;
 }
 
@@ -110,7 +141,7 @@ lval* lval_copy(lval* v) {
       x->sym = malloc(strlen(v->sym) + 1);
       strcpy(x->sym, v->sym);
       break;
-    case LVAL_FUN: x->num = v->num; break;
+    case LVAL_FUN: x->fun = v->fun; break;
     case LVAL_SEXPR:
     case LVAL_QEXPR:
       x->count = v->count;
@@ -211,7 +242,7 @@ lval* lval_read_num(mpc_ast_t* t) {
   errno = 0;
   long x = strtol(t->contents, NULL, 10);
   return errno != ERANGE ?
-    lval_num(x) : lval_err("invalid number");
+    lval_num(x) : lval_err("invalid number %s", t->contents);
 }
 
 lval* lval_read(mpc_ast_t* t) {
@@ -265,7 +296,7 @@ lval* lenv_get(lenv* e, lval* k) {
       return lval_copy(e->vals[i]);
     }
   }
-  return lval_err("Unbound symbol.");
+  return lval_err("Unbound symbol %s.", k->sym);
 }
 
 void lenv_put(lenv* e, lval* k, lval* v) {
@@ -301,9 +332,13 @@ lval* builtin_list(lenv* e, lval* a) {
 
 lval* builtin_head(lenv* e, lval* a) {
   LASSERT(a, a->count == 1,
-    "Function 'head' passed in too many arguments.");
+    "Function 'head' passed in too many arguments. "
+    "Got %i. Expected %i.",
+    a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-    "Function 'head' passed incorrect type of argument.");
+    "Function 'head' passed incorrect type of argument. "
+    "Got %s. Expected %s.",
+    a->type, ltype_name(LVAL_QEXPR));
   LASSERT(a, a->cell[0]->count != 0,
     "Function 'head' passed empty Q-expression.");
 
@@ -318,9 +353,13 @@ lval* builtin_head(lenv* e, lval* a) {
 
 lval* builtin_tail(lenv* e, lval* a) {
   LASSERT(a, a->count == 1,
-    "Function 'tail' passed in too many arguments.");
+    "Function 'tail' passed in too many arguments. "
+    "Got %i. Expected %i.",
+    a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-    "Function 'tail' passed incorrect type of argument.");
+    "Function 'tail' passed incorrect type of argument. "
+    "Got %s. Expected %s.",
+    a->type, ltype_name(LVAL_QEXPR));
   LASSERT(a, a->cell[0]->count != 0,
     "Function 'tail' passed empty Q-expression.");
 
@@ -335,9 +374,13 @@ lval* builtin_tail(lenv* e, lval* a) {
 
 lval* builtin_eval(lenv* e, lval* a) {
   LASSERT(a, a->count == 1,
-    "Function 'eval' passed in too many arguments.");
+    "Function 'eval' passed in too many arguments."
+    "Got %i. Expected %i.",
+    a->count, 1);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-    "Function 'eval' passed incorrect type of argument.");
+    "Function 'eval' passed incorrect type of argument. "
+    "Got %s. Expected %s.",
+    a->type, ltype_name(LVAL_QEXPR));
 
   lval* x = lval_take(a, 0);
   x->type = LVAL_SEXPR;
@@ -347,7 +390,9 @@ lval* builtin_eval(lenv* e, lval* a) {
 lval* builtin_join(lenv* e, lval* a) {
   for (int i = 0; i < a->count; i++) {
     LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-      "Function 'join' passed incorrect type of argument.");
+      "Function 'join' passed incorrect type of argument. "
+    "Got %s. Expected %s.",
+    a->type, ltype_name(LVAL_QEXPR));
   }
 
   lval* x = lval_pop(a, 0);
@@ -361,12 +406,36 @@ lval* builtin_join(lenv* e, lval* a) {
   return x;
 }
 
+lval* builtin_def(lenv* e, lval* a) {
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+    "Function 'def' passed incorrect type of argument. "
+    "Got %s. Expected %s.",
+    a->type, ltype_name(LVAL_QEXPR));
+
+  lval* syms = a->cell[0];
+
+  for (int i = 0; i < syms->count; i++) {
+    LASSERT(a, syms->cell[i]->type == LVAL_SYM,
+      "Function 'def' cannot define non-symbol.");
+  }
+
+  LASSERT(a, syms->count == a->count - 1,
+    "Incorrect number of values for symbols for function 'def'.");
+
+  // Update symbol table
+  for (int i = 0; i < syms->count; i++) {
+    lenv_put(e, syms->cell[i], a->cell[i+1]);
+  }
+
+  lval_del(a);
+  return lval_sexpr();
+}
+
 lval* builtin_op(lenv* e, lval* a, char* op) {
   for (int i = 0; i < a->count; i++) {
-    if (a->cell[i]->type != LVAL_NUM) {
-      lval_del(a);
-      return lval_err("Cannot operate on non-number.");
-    }
+    LASSERT(a, a->cell[i]->type == LVAL_NUM,
+      "Operator %s cannot operate on type %s.",
+      op, ltype_name(a->cell[i]->type));
   }
 
   lval* x = lval_pop(a, 0);
@@ -420,7 +489,7 @@ lval* builtin(lenv* e, lval* a, char* func) {
   if (strcmp("eval", func) == 0) { return builtin_eval(e, a); }
   if (strstr("+-/*", func)) { return builtin_op(e, a, func); }
   lval_del(a);
-  return lval_err("Unknown function.");
+  return lval_err("Unknown function %s.", func);
 }
 
 lval* lval_eval_sexpr(lenv* e, lval* v) {
@@ -462,6 +531,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "tail", builtin_tail);
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "eval", builtin_eval);
+  lenv_add_builtin(e, "def", builtin_def);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);

@@ -60,4 +60,26 @@ ml> if true 5 6
 5
 ml> if false 5 6
 6
+ml> fun {not p} {p false true}
+()
+ml> not true
+(\ {a b} {b})
+ml> not false
+(\ {a b} {a})
+ml> not (not true)
+(\ {a b} {a})
+ml> (not (not true)) 5 6
+5
+ml> (not (not (not true))) 5 6
+6
+ml> if (< 5 6 5) 1 0
+0
+ml> if (< 5 6) 1 0
+1
+ml> fun {if p a b} {eval (p a b)}
+()
+ml> if (< 6 7) {6} {7}
+6
+ml> if (< 6 7) {+ 6 8} {+ 8 7}
+14
 ```

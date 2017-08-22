@@ -145,6 +145,80 @@ lval* lval_qexpr(void) {
   return v;
 }
 
+lval* lval_true(void) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FUN;
+  v->builtin = NULL;
+  v->env = lenv_new();
+
+  // takes two arguments
+  lval* f = lval_qexpr();
+  f->cell = malloc(sizeof(lval*) * 2);
+  f->cell[0] = lval_sym("a");
+  f->cell[1] = lval_sym("b");
+  f->count = 2;
+
+  // returns first one
+  lval* b = lval_qexpr();
+  b->cell = malloc(sizeof(lval*));
+  b->cell[0] = lval_sym("a");
+  b->count = 1;
+
+  v->formals = f;
+  v->body = b;
+
+  return v;
+}
+
+lval* lval_false(void) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FUN;
+  v->builtin = NULL;
+  v->env = lenv_new();
+
+  // takes two arguments
+  lval* f = lval_qexpr();
+  f->cell = malloc(sizeof(lval*) * 2);
+  f->cell[0] = lval_sym("a");
+  f->cell[1] = lval_sym("b");
+  f->count = 2;
+
+  // returns second one
+  lval* b = lval_qexpr();
+  b->cell = malloc(sizeof(lval*));
+  b->cell[0] = lval_sym("b");
+  b->count = 1;
+
+  v->formals = f;
+  v->body = b;
+
+  return v;
+}
+
+int lval_eq(lval* x, lval* y) {
+  if (x->type != y->type) { return 0; }
+  switch (x->type) {
+    case LVAL_NUM: return (x->num == y->num);
+    case LVAL_ERR: return (strcmp(x->err, y->err) == 0);
+    case LVAL_SYM: return (strcmp(x->sym, y->sym) == 0);
+    case LVAL_FUN:
+      if (x->builtin || y->builtin) {
+        return (x->builtin == y->builtin);
+      } else {
+        return (lval_eq(x->formals, y->formals) && lval_eq(x->body, y->body));
+      }
+    case LVAL_QEXPR:
+    case LVAL_SEXPR:
+      if (x->count != y->count) { return 0; }
+      for (int i = 0; i < x->count; i++) {
+        if (!lval_eq(x->cell[i], y->cell[i])) { return 0; }
+      }
+      return 1;
+    break;
+  }
+  return 0;
+}
+
 lval* lval_copy(lval* v) {
   lval* x = malloc(sizeof(lval));
   x->type = v->type;
@@ -588,6 +662,56 @@ lval* builtin_div(lenv* e, lval *a) {
   return builtin_op(e, a, "/");
 }
 
+lval* builtin_eq(lenv* e, lval* a) {
+  lval* x = lval_pop(a, 0);
+
+  int b = 1;
+
+  while (a->count > 0) {
+    lval* y = lval_pop(a, 0);
+
+    if (!lval_eq(x, y)) {
+      b = 0;
+    }
+
+    lval_del(x);
+    x = y;
+  }
+
+  lval_del(x);
+  lval_del(a);
+
+  return b ? lval_true() : lval_false();
+}
+
+lval* builtin_lt(lenv* e, lval* a) {
+  for (int i = 0; i < a->count; i++) {
+    LASSERT(a, a->cell[i]->type == LVAL_NUM,
+      "Operator '<' cannot operate on type %s.",
+      ltype_name(a->cell[i]->type));
+  }
+
+  lval* x = lval_pop(a, 0);
+
+  int b = 1;
+
+  while (a->count > 0) {
+    lval* y = lval_pop(a, 0);
+
+    if (x->num >= y->num) {
+      b = 0;
+    }
+
+    lval_del(x);
+    x = y;
+  }
+
+  lval_del(x);
+  lval_del(a);
+
+  return b ? lval_true() : lval_false();
+}
+
 lval* builtin(lenv* e, lval* a, char* func) {
   if (strcmp("list", func) == 0) { return builtin_list(e, a); }
   if (strcmp("head", func) == 0) { return builtin_head(e, a); }
@@ -713,10 +837,12 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "-", builtin_sub);
   lenv_add_builtin(e, "*", builtin_mul);
   lenv_add_builtin(e, "/", builtin_div);
+  lenv_add_builtin(e, "<", builtin_lt);
+  lenv_add_builtin(e, "eq?", builtin_eq);
 }
 
 int main(int argc, char** argv) {
-  puts("MyLISP v. 0.0.12-SNAPSHOT");
+  puts("MyLISP v. 0.0.13-SNAPSHOT");
 
   mpc_parser_t* Number = mpc_new("number");
   mpc_parser_t* Symbol = mpc_new("symbol");
@@ -728,7 +854,7 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     " \
       number: /-?[0-9]+/ ; \
-      symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ; \
+      symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>?!&]+/ ; \
       sexpr: '(' <expr>* ')' ; \
       qexpr: '{' <expr>* '}' ; \
       expr: <number> | <symbol> | <sexpr> | <qexpr> ; \

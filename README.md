@@ -42,4 +42,22 @@ ml> - x y
 150
 ml> + x y
 350
+ml> def {fun} (\ {args body} {def (head args) (\ (tail args) body)})
+()
+ml> fun {add-two x y} {+ x y}
+()
+ml> add-two 5
+(\ {y} {+ x y})
+ml> add-two 5 6
+11
+ml> fun {true a b} {a}
+()
+ml> fun {false a b} {b}
+()
+ml> fun {if p a b} {p a b}
+()
+ml> if true 5 6
+5
+ml> if false 5 6
+6
 ```

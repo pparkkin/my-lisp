@@ -90,4 +90,6 @@ ml> head {"hello" "world"}
 {"hello"}
 ml> eval (head {"hello" "world"})
 "hello"
+ml> "hello" ; world
+"hello"
 ```

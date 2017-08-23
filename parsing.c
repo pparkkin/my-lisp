@@ -408,11 +408,14 @@ lval* lval_read(mpc_ast_t* t) {
   if (strstr(t->tag, "qexpr")) { x = lval_qexpr(); }
 
   for (int i = 0; i < t->children_num; i++) {
+    if (strstr(t->children[i]->tag, "comment")) { continue; }
+    
     if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
     if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
     if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
     if (strcmp(t->children[i]->contents, "}") == 0) { continue; }
     if (strcmp(t->children[i]->tag, "regex") == 0) { continue; }
+
     x = lval_add(x, lval_read(t->children[i]));
   }
 
@@ -888,6 +891,7 @@ int main(int argc, char** argv) {
   mpc_parser_t* Symbol = mpc_new("symbol");
   mpc_parser_t* Sexpr = mpc_new("sexpr");
   mpc_parser_t* Qexpr = mpc_new("qexpr");
+  mpc_parser_t* Comment = mpc_new("comment");
   mpc_parser_t* Expr = mpc_new("expr");
   mpc_parser_t* MyLISP = mpc_new("mylisp");
 
@@ -898,10 +902,13 @@ int main(int argc, char** argv) {
       symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>?!&]+/ ; \
       sexpr: '(' <expr>* ')' ; \
       qexpr: '{' <expr>* '}' ; \
-      expr: <number> | <string> | <symbol> | <sexpr> | <qexpr> ; \
+      comment : /;[^\\r\\n]*/ ; \
+      expr: <number> | <string> | <symbol> \
+          | <sexpr> | <qexpr> | <comment> ; \
       mylisp: /^/ <expr>* /$/ ; \
     ",
-    Number, String, Symbol, Sexpr, Qexpr, Expr, MyLISP);
+    Number, String, Symbol,
+    Sexpr, Qexpr, Comment, Expr, MyLISP);
 
   lenv* e = lenv_new();
   lenv_add_builtins(e);
@@ -928,6 +935,7 @@ int main(int argc, char** argv) {
 
   lenv_del(e);
 
-  mpc_cleanup(4, Number, String, Symbol, Sexpr, Qexpr, Expr, MyLISP);
+  mpc_cleanup(4, Number, String, Symbol,
+    Sexpr, Qexpr, Comment, Expr, MyLISP);
   return 0;
 }

@@ -92,4 +92,9 @@ ml> eval (head {"hello" "world"})
 "hello"
 ml> "hello" ; world
 "hello"
+ml> (print "Hello, World!")
+"Hello, World!"
+()
+ml> (error "Ouch!")
+ERROR: Ouch!
 ```

@@ -33,6 +33,16 @@ void add_history(char* unused) {}
     return err; \
   }
 
+// forward declare parsers
+mpc_parser_t* Number;
+mpc_parser_t* String;
+mpc_parser_t* Symbol;
+mpc_parser_t* Sexpr;
+mpc_parser_t* Qexpr;
+mpc_parser_t* Comment;
+mpc_parser_t* Expr;
+mpc_parser_t* MyLISP;
+
 // Declare types so I can use them later in lbuiltin typedef
 struct lval;
 struct lenv;
@@ -409,7 +419,7 @@ lval* lval_read(mpc_ast_t* t) {
 
   for (int i = 0; i < t->children_num; i++) {
     if (strstr(t->children[i]->tag, "comment")) { continue; }
-    
+
     if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
     if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
     if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
@@ -630,7 +640,7 @@ lval* builtin_lambda(lenv* e, lval* a) {
   LASSERT(a, a->count == 2,
     "Function '\\' passed in incorrect number of arguments."
     "Got %i. Expected %i.",
-    a->count, 1);
+    a->count, 2);
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
     "Function '\\' passed incorrect type of first argument. "
     "Got %s. Expected %s.",
@@ -652,6 +662,75 @@ lval* builtin_lambda(lenv* e, lval* a) {
   lval_del(a);
 
   return lval_lambda(formals, body);
+}
+
+lval* builtin_load(lenv* e, lval *a) {
+  LASSERT(a, a->count == 1,
+    "Function 'load' passed in incorrect number of arguments."
+    "Got %i. Expected %i.",
+    a->count, 1);
+  LASSERT(a, a->cell[0]->type == LVAL_STR,
+    "Function 'load' passed incorrect type of first argument. "
+    "Got %s. Expected %s.",
+    ltype_name(a->cell[0]->type), ltype_name(LVAL_STR));
+
+  mpc_result_t r;
+  if (mpc_parse_contents(a->cell[0]->str, MyLISP, &r)) {
+    lval* expr = lval_read(r.output);
+    mpc_ast_delete(r.output);
+
+    while (expr->count) {
+      lval* x = lval_eval(e, lval_pop(expr, 0));
+      if (x->type == LVAL_ERR) {
+        lval_println(x);
+      }
+      lval_del(x);
+    }
+
+    lval_del(expr);
+    lval_del(a);
+
+    return lval_sexpr();
+  } else {
+    char* err_msg = mpc_err_string(r.error);
+    mpc_err_delete(r.error);
+
+    lval* err = lval_err("Could not load library %s. %s",
+      a->cell[0]->str, err_msg);
+
+    free(err_msg);
+    lval_del(a);
+
+    return err;
+  }
+
+}
+
+lval* builtin_print(lenv* e, lval* a) {
+  for (int i = 0; i < a->count; i++) {
+    lval_print(a->cell[i]); putchar(' ');
+  }
+  lval_del(a);
+
+  putchar('\n');
+
+  return lval_sexpr();
+}
+
+lval* builtin_error(lenv* e, lval* a) {
+  LASSERT(a, a->count == 1,
+    "Function 'error' passed in incorrect number of arguments."
+    "Got %i. Expected %i.",
+    a->count, 1);
+  LASSERT(a, a->cell[0]->type == LVAL_STR,
+    "Function 'error' passed incorrect type of first argument. "
+    "Got %s. Expected %s.",
+    ltype_name(a->cell[0]->type), ltype_name(LVAL_STR));
+
+  lval* err = lval_err(a->cell[0]->str);
+  lval_del(a);
+
+  return err;
 }
 
 lval* builtin_op(lenv* e, lval* a, char* op) {
@@ -752,17 +831,6 @@ lval* builtin_lt(lenv* e, lval* a) {
   lval_del(a);
 
   return b ? lval_true() : lval_false();
-}
-
-lval* builtin(lenv* e, lval* a, char* func) {
-  if (strcmp("list", func) == 0) { return builtin_list(e, a); }
-  if (strcmp("head", func) == 0) { return builtin_head(e, a); }
-  if (strcmp("tail", func) == 0) { return builtin_tail(e, a); }
-  if (strcmp("join", func) == 0) { return builtin_join(e, a); }
-  if (strcmp("eval", func) == 0) { return builtin_eval(e, a); }
-  if (strstr("+-/*", func)) { return builtin_op(e, a, func); }
-  lval_del(a);
-  return lval_err("Unknown function %s.", func);
 }
 
 lval* lval_call(lenv* e, lval* f, lval* a) {
@@ -872,8 +940,13 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "def", builtin_def);
+
   lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "\\", builtin_lambda);
+
+  lenv_add_builtin(e, "load", builtin_load);
+  lenv_add_builtin(e, "print", builtin_print);
+  lenv_add_builtin(e, "error", builtin_error);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -884,16 +957,18 @@ void lenv_add_builtins(lenv* e) {
 }
 
 int main(int argc, char** argv) {
-  puts("MyLISP v. 0.0.13-SNAPSHOT");
+  if (argc == 1) {
+    puts("MyLISP v. 0.0.13-SNAPSHOT");
+  }
 
-  mpc_parser_t* Number = mpc_new("number");
-  mpc_parser_t* String = mpc_new("string");
-  mpc_parser_t* Symbol = mpc_new("symbol");
-  mpc_parser_t* Sexpr = mpc_new("sexpr");
-  mpc_parser_t* Qexpr = mpc_new("qexpr");
-  mpc_parser_t* Comment = mpc_new("comment");
-  mpc_parser_t* Expr = mpc_new("expr");
-  mpc_parser_t* MyLISP = mpc_new("mylisp");
+  Number = mpc_new("number");
+  String = mpc_new("string");
+  Symbol = mpc_new("symbol");
+  Sexpr = mpc_new("sexpr");
+  Qexpr = mpc_new("qexpr");
+  Comment = mpc_new("comment");
+  Expr = mpc_new("expr");
+  MyLISP = mpc_new("mylisp");
 
   mpca_lang(MPCA_LANG_DEFAULT,
     " \
@@ -913,27 +988,40 @@ int main(int argc, char** argv) {
   lenv* e = lenv_new();
   lenv_add_builtins(e);
 
-  puts("Press Ctrl-c to exit.\n");
-
-  while (1) {
-    char* input = readline("ml> ");
-    add_history(input);
-
-    mpc_result_t r;
-    if (mpc_parse("<stdin>", input, MyLISP, &r)) {
-      lval* x = lval_eval(e, lval_read(r.output));
-      lval_println(x);
+  if (argc >= 2) {
+    for (int i = 1; i < argc; i++) {
+      lval* args = lval_add(lval_sexpr(), lval_str(argv[i]));
+      lval* x = builtin_load(e, args);
+      if (x->type == LVAL_ERR) {
+        lval_println(x);
+      }
       lval_del(x);
-      mpc_ast_delete(r.output);
-    } else {
-      mpc_err_print(r.error);
-      mpc_err_delete(r.error);
     }
-
-    free(input);
   }
 
-  lenv_del(e);
+  if (argc == 1) {
+    puts("Press Ctrl-c to exit.\n");
+
+    while (1) {
+      char* input = readline("ml> ");
+      add_history(input);
+
+      mpc_result_t r;
+      if (mpc_parse("<stdin>", input, MyLISP, &r)) {
+        lval* x = lval_eval(e, lval_read(r.output));
+        lval_println(x);
+        lval_del(x);
+        mpc_ast_delete(r.output);
+      } else {
+        mpc_err_print(r.error);
+        mpc_err_delete(r.error);
+      }
+
+      free(input);
+    }
+
+    lenv_del(e);
+  }
 
   mpc_cleanup(4, Number, String, Symbol,
     Sexpr, Qexpr, Comment, Expr, MyLISP);

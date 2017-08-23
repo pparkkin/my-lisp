@@ -82,4 +82,12 @@ ml> if (< 6 7) {6} {7}
 6
 ml> if (< 6 7) {+ 6 8} {+ 8 7}
 14
+ml> "hello"
+"hello"
+ml> {"hello" "world"}
+{"hello" "world"}
+ml> head {"hello" "world"}
+{"hello"}
+ml> eval (head {"hello" "world"})
+"hello"
 ```

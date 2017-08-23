@@ -958,7 +958,7 @@ void lenv_add_builtins(lenv* e) {
 
 int main(int argc, char** argv) {
   if (argc == 1) {
-    puts("MyLISP v. 0.0.13-SNAPSHOT");
+    puts("MyLISP v. 0.0.15-SNAPSHOT");
   }
 
   Number = mpc_new("number");

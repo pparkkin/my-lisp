@@ -1,0 +1,108 @@
+(def {fun}
+  (\ {args body}
+    {def (head args) (\ (tail args) body)}))
+
+(fun {unpack f l} {
+  eval (join (list f) l)
+})
+
+(fun {pack f & xs} {
+  f xs
+})
+
+(def {curry} unpack)
+(def {uncurry} pack)
+
+(fun {do & l} {
+  if (nil? l)
+    {}
+    {last l}
+})
+
+(fun {let b} {
+  ((\ {_} b) ())
+})
+
+(fun {flip f a b} {f b a})
+(fun {comp f g x} {f (g x)})
+
+(fun {select & cs} {
+  if (nil? cs)
+    {error "No selection found."}
+    {
+      if (fst (fst cs))
+        {snd (fst cs)}
+        {unpack select (tail cs)}
+    }
+})
+
+(fun {case x & cs} {
+  if (nil? cs)
+    {error "No case found."}
+    {
+      if (eq? x (fst (fst cs)))
+        {snd (fst cs)}
+        {unpack case (join (list x) (tail cs))}
+    }
+})
+
+(def {otherwise} true)
+
+; booleans
+(fun {true a b} {a})
+(fun {false a b} {b})
+(fun {not p} {p false true})
+(fun {and p q} {p q false})
+(fun {or p q} {p true q})
+
+(fun {if p a b} {eval (p a b)})
+
+; lists
+(def {nil} {})
+(fun {nil? xs} {
+  eq? xs nil
+})
+
+(fun {length xs} {
+  if (nil? xs)
+    {0}
+    {+ 1 (length (tail xs))}
+})
+
+(fun {fst xs} {eval (head xs)})
+(fun {snd xs} {eval (head (tail xs))})
+
+(fun {last xs} {
+  if (eq? (length xs) 1)
+    {fst xs}
+    {last (tail xs)}
+})
+
+(fun {map f l} {
+  if (nil? l)
+    {nil}
+    {join (list (f (fst l))) (map f (tail l))}
+})
+
+(fun {filter p l} {
+  if (nil? l)
+    {nil}
+    {join (if (p (fst l)) {head l} {nil}) (filter p (tail l))}
+})
+
+(fun {foldl f z l} {
+  if (nil? l)
+    {z}
+    {foldl f (f z (fst l)) (tail l)}
+})
+
+; numbers
+(fun {sum l} {foldl + 0 l})
+(fun {product l} {foldl * 1 l})
+
+(fun {fib n} {
+  select
+    {(eq? n 0) 1}
+    {(eq? n 1) 1}
+    {otherwise (+ (fib (- n 1)) (fib (- n 2)))}
+})

@@ -3,6 +3,12 @@
 
 #include "mpc.h"
 
+// #include "omr.h"
+#include "omrport.h"
+#include "omrvm.h"
+
+#include "omrmylispvm.h"
+
 #ifdef _WIN32
 #include <string.h>
 
@@ -45,8 +51,8 @@ mpc_parser_t* MyLISP;
 
 // Declare types so I can use them later in lbuiltin typedef
 struct lval;
-struct lenv;
 typedef struct lval lval;
+struct lenv;
 typedef struct lenv lenv;
 
 enum { LVAL_ERR, LVAL_NUM, LVAL_STR, LVAL_SYM,
@@ -959,6 +965,43 @@ void lenv_add_builtins(lenv* e) {
 int main(int argc, char** argv) {
   if (argc == 1) {
     puts("MyLISP v. 0.0.15-SNAPSHOT");
+  }
+
+  OMR_VM_MyLISP myLISPVM;
+  OMR_VMThread* omrVMThread = NULL;
+  myLISPVM._omrVM = NULL;
+  myLISPVM.rootTable = NULL;
+  myLISPVM.objectTable = NULL;
+  myLISPVM._vmAccessMutex = NULL;
+  myLISPVM._vmExclusiveAccessCount = 0;
+
+  omr_error_t rc = OMR_Initialize_VM(&myLISPVM._omrVM, &omrVMThread,
+    &myLISPVM, NULL);
+  if (rc != OMR_ERROR_NONE) {
+    puts("Failed to initialize VM.");
+    exit(1);
+  }
+
+  intptr_t rw_rc = omrthread_rwmutex_init(&myLISPVM._vmAccessMutex,
+    0, "VM exclusive access");
+  if (rw_rc != J9THREAD_RWMUTEX_OK) {
+    puts("Failed to initialize mutex.");
+    exit(2);
+  }
+
+  myLISPVM.rootTable = hashTableNew(
+    myLISPVM._omrVM->_runtime->_portLibrary, OMR_GET_CALLSITE(),
+    0, sizeof(RootEntry), 0, 0, OMRMEM_CATEGORY_MM,
+    rootTableHashFn, rootTableHashEqualFn, NULL, NULL);
+
+  myLISPVM.objectTable = hashTableNew(
+    myLISPVM._omrVM->_runtime->_portLibrary, OMR_GET_CALLSITE(),
+    0, sizeof(ObjectEntry), 0, 0, OMRMEM_CATEGORY_MM,
+    objectTableHashFn, objectTableHashEqualFn, NULL, NULL);
+
+  OMRPORT_ACCESS_FROM_OMRVM(myLISPVM._omrVM);
+  if (argc == 1) {
+    puts("VM/GC initialized.");
   }
 
   Number = mpc_new("number");

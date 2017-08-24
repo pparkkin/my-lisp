@@ -1,2 +1,4 @@
 prompt
 parsing
+*.o
+*.d

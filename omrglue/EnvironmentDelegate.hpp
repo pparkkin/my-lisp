@@ -170,7 +170,7 @@ public:
 	 * shared VM access as quickly as possible in that event.
 	 */
 	void acquireVMAccess();
-
+	
 	/**
 	 * Release shared VM acccess.
 	 */
@@ -210,7 +210,7 @@ public:
 	 * @return the exclusive count of the current thread before relinquishing
 	 * @see assumeExclusiveVMAccess(uintptr_t)
 	 */
-	uintptr_t relinquishExclusiveVMAccess(bool*&);
+	uintptr_t relinquishExclusiveVMAccess(bool *deferredVMAccessRelease);
 
 	/**
 	 * Assume exclusive access from a collaborating thread (i.e. main-to-master or master-to-main).

@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * (c) Copyright IBM Corp. 2014, 2016
+ * (c) Copyright IBM Corp. 1991, 2016
  *
  *  This program and the accompanying materials are made available
  *  under the terms of the Eclipse Public License v1.0 and
@@ -16,25 +16,25 @@
  *    Multiple authors (IBM Corp.) - initial implementation and documentation
  *******************************************************************************/
 
-#if !defined(OBJECTDESCRIPTION_H_)
-#define OBJECTDESCRIPTION_H_
-
-#include "omrcomp.h"
 #include "omr.h"
+#include "objectdescription.h"
 
-/**
- * Object token definitions to be used by OMR components.
- */
-typedef uintptr_t* languageobjectptr_t;
-typedef uintptr_t* omrobjectptr_t;
-typedef uintptr_t* omrarrayptr_t;
+#include "CompactSchemeFixupObject.hpp"
+#include "EnvironmentStandard.hpp"
 
-#if defined (OMR_GC_COMPRESSED_POINTERS)
-typedef uint32_t fomrobject_t;
-typedef uint32_t fomrarray_t;
-#else
-typedef uintptr_t fomrobject_t;
-typedef uintptr_t fomrarray_t;
-#endif
+#if defined(OMR_GC_MODRON_COMPACTION)
 
-#endif /* OBJECTDESCRIPTION_H_ */
+void
+MM_CompactSchemeFixupObject::fixupObject(MM_EnvironmentStandard *env, omrobjectptr_t objectPtr)
+{
+#error provide an implementation to fix objects during a compact
+}
+
+
+void
+MM_CompactSchemeFixupObject::verifyForwardingPtr(omrobjectptr_t objectPtr, omrobjectptr_t forwardingPtr)
+{
+#error provide an implementation to verify objects after a compact is complete
+}
+
+#endif /* OMR_GC_MODRON_COMPACTION */

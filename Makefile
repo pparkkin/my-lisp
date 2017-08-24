@@ -11,7 +11,7 @@ include $(OMRDIR)/omrmakefiles/omr_defs.mk
 all: parsing
 
 parsing: omr parsing.o mpc/mpc.o
-	cc -Wall -g -L$(OMRLIBDIR) -lstdc++ -ledit -lm -lrt -lpthread -ldl -lomrstatic -lj9hashtable omrglue/omrmylispvm.o mpc/mpc.o parsing.o -o parsing
+	cc -Wall -g parsing.o mpc/mpc.o -L$(OMRLIBDIR) -lomrglue -lj9hashtable -lomrstatic -lstdc++ -ledit -lm -lrt -lpthread -ldl -o parsing
 
 parsing.o: parsing.c
 	cc -c -Wall -g --std=gnu99 -Impc -I$(OMRDIR)/include_core -Iomrglue parsing.c
